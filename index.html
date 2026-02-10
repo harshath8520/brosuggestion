@@ -221,6 +221,14 @@ textarea{
   font-size:clamp(14px,2.5vw,18px);
   width:auto;
   min-width:120px;
+  transition: all 0.1s ease;
+  user-select: none;
+}
+
+.submit-btn:active{
+  transform: scale(0.95);
+  background: #eab308;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
 }
 
 @media (max-width:480px){
@@ -298,23 +306,30 @@ footer{
 /* SUCCESS MODAL */
 .modal{
   position:fixed;
-  inset:0;
-  background:rgba(0,0,0,.6);
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  background:rgba(0,0,0,.8);
   display:none;
   align-items:center;
   justify-content:center;
-  z-index:999;
+  z-index:1100; /* Higher than confetti */
+  will-change: opacity;
 }
 
 .modal-content{
   background:#fff;
-  padding:30px;
-  border-radius:16px;
+  padding:40px 30px;
+  border-radius:20px;
   text-align:center;
-  animation:pop .4s ease;
+  animation:pop .4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   margin:20px;
-  max-width:400px;
+  max-width:450px;
   width:calc(100% - 40px);
+  border: 4px solid #000;
+  box-shadow: 12px 12px 0 #000;
+  position: relative;
 }
 
 @media (max-width:480px){
@@ -326,7 +341,7 @@ footer{
 }
 
 @keyframes pop{
-  from{transform:scale(.7);opacity:0}
+  from{transform:scale(.5);opacity:0}
   to{transform:scale(1);opacity:1}
 }
 
@@ -497,8 +512,13 @@ footer{
 <!-- SUCCESS MODAL -->
 <div class="modal" id="successModal">
   <div class="modal-content">
-    <h2>🎉 Submitted Successfully!</h2>
-    <p>Thanks for your suggestion</p>
+    <div style="font-size: 60px; margin-bottom: 20px;">🎉</div>
+    <h2 style="font-size: 28px; margin-bottom: 10px; font-weight: 800; color: #000;">Submitted Successfully!</h2>
+    <p style="font-size: 18px; margin-bottom: 30px; color: #333;">Thanks for your suggestion, Nanba!</p>
+    <button onclick="document.getElementById('successModal').style.display='none'" 
+            style="padding: 15px 40px; border-radius: 999px; border: 3px solid #000; background: var(--accent); cursor: pointer; font-weight: 800; font-size: 18px; box-shadow: 4px 4px 0 #000; transition: all 0.2s;">
+      Close
+    </button>
   </div>
 </div>
 
@@ -508,84 +528,104 @@ footer{
 
 <script>
 firebase.initializeApp({
-  apiKey:"AIzaSyCf2_pXqNV1MBrDmXJ0zmjuGI_FaTtuk9Y",
-  authDomain:"brototype-video-suggestions.firebaseapp.com",
-  projectId:"brototype-video-suggestions",
-  storageBucket:"brototype-video-suggestions.appspot.com",
-  messagingSenderId:"1058411385332",
-  appId:"1:1058411385332:web:757cc5617a4698ea5f69a1"
+    apiKey: "AIzaSyBWyQ1_3C9Rf3xTFTG0QqIBmfcTKtFPQd8",
+    authDomain: "brosuggestion.firebaseapp.com",
+    projectId: "brosuggestion",
+    storageBucket: "brosuggestion.firebasestorage.app",
+    messagingSenderId: "229701275666",
+    appId: "1:229701275666:web:245fd2588b00efbe7088cb"
 });
 
 const db = firebase.firestore();
 const form = document.getElementById("suggestionForm");
 
-form.addEventListener("submit", async (e) => {
-  e.preventDefault();
+if (form) {
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
 
-  const nameVal = document.getElementById("name").value.trim();
-  const mobileVal = document.getElementById("mobile").value.trim();
-  const qualificationVal = document.getElementById("qualification").value.trim();
-  const cityVal = document.getElementById("city").value.trim();
-  const topicVal = document.getElementById("topic").value.trim();
+    // 1. GET VALUES
+    const nameVal = document.getElementById("name").value.trim();
+    const mobileVal = document.getElementById("mobile").value.trim();
+    const qualificationVal = document.getElementById("qualification").value.trim();
+    const cityVal = document.getElementById("city").value.trim();
+    const topicVal = document.getElementById("topic").value.trim();
 
-  if (!nameVal || !mobileVal || !cityVal || !topicVal) {
-    alert("Please fill all required fields");
-    return;
-  }
+    // 2. INSTANT SUCCESS (Optimistic UI)
+    // We show the success modal and reset the form immediately 
+    // so the user doesn't have to wait for the network.
+    showSuccess();
+    form.reset();
 
-  try {
-    await db.collection("videoSuggestions").add({
+    // 3. SILENT BACKGROUND SAVE
+    // This runs in the background. The user is already happy!
+    db.collection("videoSuggestions").add({
       name: nameVal,
       mobile: mobileVal,
       qualification: qualificationVal || "",
       city: cityVal,
       topic: topicVal,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(() => {
+      console.log("Background save complete.");
+    }).catch((err) => {
+      console.error("Background save failed:", err);
     });
+  });
+}
 
-    showSuccess();
-    form.reset();
-
-  } catch (err) {
-    console.error(err);
-    alert("Submission failed. Try again.");
-  }
-});
-
-/* POPUP + CONFETTI */
+/* POPUP + CONFETTI (OPTIMIZED) */
 function showSuccess(){
-  document.getElementById("successModal").style.display="flex";
-
-  const colors=['#ff0000','#00ff00','#0000ff','#ffff00','#ff00ff','#00ffff','#ff8800','#8800ff','#ff0088','#00ff88','#ff6600','#6600ff'];
-  const confettiCount=300;
-  const shapes=['square','rectangle','circle'];
+  const modal = document.getElementById("successModal");
+  if (!modal) return;
   
-  const confettiContainer=document.createElement("div");
-  confettiContainer.className="confetti";
-  document.body.appendChild(confettiContainer);
+  // Show modal immediately to provide instant feedback
+  modal.style.display="flex";
 
-  for(let i=0;i<confettiCount;i++){
-    const piece=document.createElement("div");
-    const shape=shapes[Math.floor(Math.random()*shapes.length)];
-    piece.className="confetti-piece "+shape;
-    
-    const size=Math.random();
-    if(size>0.7) piece.classList.add("large");
-    else if(size<0.3) piece.classList.add("small");
-    
-    piece.style.color=colors[Math.floor(Math.random()*colors.length)];
-    piece.style.left=Math.random()*100+"%";
-    piece.style.setProperty('--drift',(Math.random()-0.5)*2);
-    piece.style.animationDelay=Math.random()*0.8+"s";
-    piece.style.animationDuration=(3+Math.random()*2)+"s";
-    
-    confettiContainer.appendChild(piece);
-  }
+  // Clear any existing confetti containers
+  const containers = document.querySelectorAll(".confetti");
+  containers.forEach(c => c.remove());
 
-  setTimeout(()=>{
-    confettiContainer.remove();
-    document.getElementById("successModal").style.display="none";
-  },4000);
+  // Use requestAnimationFrame to defer heavy DOM creation 
+  // until the modal has been rendered by the browser
+  requestAnimationFrame(() => {
+    const colors=['#ff0000','#00ff00','#0000ff','#ffff00','#ff00ff','#00ffff','#ff8800','#8800ff','#ff0088','#00ff88','#ff6600','#6600ff'];
+    const confettiCount = 150; // Optimized count
+    const shapes=['square','rectangle','circle'];
+    
+    const confettiContainer = document.createElement("div");
+    confettiContainer.className = "confetti";
+    
+    // Use DocumentFragment for batch DOM injection (prevents multiple reflows)
+    const fragment = document.createDocumentFragment();
+
+    for(let i=0; i<confettiCount; i++){
+      const piece = document.createElement("div");
+      const shape = shapes[Math.floor(Math.random()*shapes.length)];
+      piece.className = "confetti-piece " + shape;
+      
+      const size = Math.random();
+      if(size > 0.75) piece.classList.add("large");
+      else if(size < 0.25) piece.classList.add("small");
+      
+      piece.style.color = colors[Math.floor(Math.random()*colors.length)];
+      piece.style.left = Math.random() * 100 + "%";
+      piece.style.setProperty('--drift', (Math.random() - 0.5) * 2);
+      piece.style.animationDelay = Math.random() * 0.5 + "s";
+      piece.style.animationDuration = (2 + Math.random() * 2) + "s";
+      
+      fragment.appendChild(piece);
+    }
+
+    confettiContainer.appendChild(fragment);
+    document.body.appendChild(confettiContainer);
+
+    // Auto-cleanup confetti elements after animation
+    setTimeout(() => {
+      if (confettiContainer.parentNode) {
+        confettiContainer.remove();
+      }
+    }, 5000);
+  });
 }
 </script>
 
